@@ -1,0 +1,551 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+.noselect {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+</style>
+<title>CT noise simulator</title>
+<script type="text/javascript">
+
+var phantom, blurredPhantom, noise, current, voltage, 
+    nKernel, gKernel, width, height, context, scale,
+    windowWidth, windowCenter, concentration,c;
+
+function first_run()
+{
+	c = document.getElementById("sliceCanvas");
+	context = c.getContext("2d");
+	
+	width = 512;
+	height = 512;
+
+	init();
+
+	/*
+	c.addEventListener('mousemove', function(evt) {
+      		var mousePos = getMousePos(c, evt);
+		var message = "Mouse position: " + mousePos.x + "," + mousePos.y;
+		alert(message);
+	}, false);
+	*/
+}
+
+/*
+function getMousePos(canvas, event)
+{
+    var mouseX = (event.pageX - canvas.offsetLeft - (c.width-width*scale)/2)/scale;
+    var mouseY = (event.pageY - canvas.offsetTop - (c.height-height*scale)/2)/scale;
+
+    return {
+        x: mouseX,
+        y: mouseY };
+}
+*/
+
+function init()
+{
+
+	c.width = Math.max(Math.round(window.innerWidth*0.95),width);
+	c.height = Math.max(Math.round(window.innerHeight*0.75),height);
+
+
+	windowWidth = document.getElementsByName("sliderWindowWidth")[0].value;
+	windowCenter = document.getElementsByName("sliderWindowCenter")[0].value;
+	current = document.getElementsByName("sliderCurrent")[0].value;
+	voltage = document.getElementsByName("sliderVoltage")[0].value;
+	concentration = document.getElementsByName("sliderConcentration")[0].value;
+	scale = document.getElementsByName("sliderScale")[0].value;
+
+	nKernel = document.getElementsByName("selectKernel")[0].value;
+
+	generateKernel();
+
+	phantom = generatePhantom();
+
+	blurredPhantom = applyMTF();
+
+	noise = generateNoise();
+
+	updateGraphics();
+
+}
+
+
+function generateKernel()
+{
+	var w = 5;
+	var h = 5;
+	var sum = 0;
+
+
+	var out = new Array(w);
+
+
+	for (var i = 0; i < w; i++)
+		out[i] = new Array(h);
+
+	for (var i = 0; i < w; i++)
+		for (var j = 0; j < h; j++)
+		{
+			out[i][j] = 1;
+			sum = sum + out[i][j];
+		}
+
+
+	for (var i = 0; i < w; i++)
+		for (var j = 0; j < h; j++)
+			out[i][j] = out[i][j]/sum;
+
+	gKernel = out;
+}
+
+function generatePhantom()
+{
+	var out = new Array(width);
+
+	var R2 = Math.pow(4*width/9,2);
+
+	var tissue = 70;
+
+	for (var i = 0; i < width; i++)
+		out[i] = new Array(height);	
+
+
+	for (var i = 0; i < width; i++)
+		for (var j = 0; j < height; j++)
+			if (Math.pow(i-(width/2),2)+Math.pow(j-(height/2),2) < R2)
+				out[i][j] = tissue;
+			else
+				out[i][j] = -1000;
+
+
+	drawInserts(out);
+
+	return out;
+}
+
+function drawCircle(out, x0, y0, R, val)
+{
+	var R2 = Math.pow(R,2);
+	for (var i = Math.round(x0-R); i < x0+R; i++)
+		for (var j = Math.round(y0-R); j < y0+R; j++)
+			if (Math.pow(i-x0,2)+Math.pow(j-y0,2) < R2)
+				out[i][j] = val;
+}
+
+function drawInserts(out)
+{
+	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
+	var tis = 60, tisD = 20;
+
+	for (var i = 0; i < 4; i++)
+		for (var j = 0; j < 5; j++)
+			drawCircle(out, 128+64*j, 128+64*i, 20-5*j+2, tis+tisD*i);	
+
+
+	drawCircle(out, 128, 384, 20, iodine);
+	drawCircle(out, 192, 384, 15, iodine);
+	drawCircle(out, 256, 384, 10, iodine);
+	drawCircle(out, 320, 384, 5, iodine);
+	drawCircle(out, 384, 384, 2, iodine);
+}
+
+function applyMTF()
+{
+	return convolute(phantom,gKernel);
+}
+
+function generateNoise()
+{
+	var out = new Array(width);
+	for (var i = 0; i < width; i++)
+		out[i] = new Array(height);
+
+
+	for (var i = 0; i < width; i++)
+		for (var j = 0; j < height; j++)
+			out[i][j] = normal_random();	
+
+	return convolute(out, noiseKernel(nKernel));
+}
+
+function randn()
+{
+	var out = 0;
+	for (var i = 0; i < 5; i++)
+		out = out + Math.random();
+	return out;
+}
+
+function normal_random(mean, variance) {
+  if (mean == undefined)
+    mean = 0.0;
+  if (variance == undefined)
+    variance = 1.0;
+  var V1, V2, S;
+  do {
+    var U1 = Math.random();
+    var U2 = Math.random();
+    V1 = 2 * U1 - 1;
+    V2 = 2 * U2 - 1;
+    S = V1 * V1 + V2 * V2;
+  } while (S > 1);
+
+  X = Math.sqrt(-2 * Math.log(S) / S) * V1;
+//Y = Math.sqrt(-2 * Math.log(S) / S) * V2;
+  X = mean + Math.sqrt(variance) * X;
+//Y = mean + Math.sqrt(variance) * Y ;
+  return X;
+}
+
+function noiseKernel(kernel)
+{
+if (kernel == "SOFT") {
+	var out = 
+	[[-0.0250,-0.0218,-0.0225,-0.0184,-0.0158,-0.0120,-0.0158,-0.0184,-0.0225,-0.0218,-0.0250],
+	 [-0.0218,-0.0222,-0.0283,-0.0641,-0.0860,-0.0947,-0.0860,-0.0641,-0.0283,-0.0222,-0.0218],
+	 [-0.0225,-0.0283,-0.0715,-0.0399,-0.0223,-0.0464,-0.0223,-0.0399,-0.0715,-0.0283,-0.0225],
+	 [-0.0184,-0.0641,-0.0399,-0.1613,-0.6007,-0.7002,-0.6007,-0.1613,-0.0399,-0.0641,-0.0184],
+	 [-0.0158,-0.0860,-0.0223,-0.6007, 0.6058, 3.0681, 0.6058,-0.6007,-0.0223,-0.0860,-0.0158],
+	 [-0.0120,-0.0947,-0.0464,-0.7002, 3.0681, 9.6759, 3.0681,-0.7002,-0.0464,-0.0947,-0.0120],
+	 [-0.0158,-0.0860,-0.0223,-0.6007, 0.6058, 3.0681, 0.6058,-0.6007,-0.0223,-0.0860,-0.0158],
+	 [-0.0184,-0.0641,-0.0399,-0.1613,-0.6007,-0.7002,-0.6007,-0.1613,-0.0399,-0.0641,-0.0184],
+	 [-0.0225,-0.0283,-0.0715,-0.0399,-0.0223,-0.0464,-0.0223,-0.0399,-0.0715,-0.0283,-0.0225],
+	 [-0.0218,-0.0222,-0.0283,-0.0641,-0.0860,-0.0947,-0.0860,-0.0641,-0.0283,-0.0222,-0.0218],
+	 [-0.0250,-0.0218,-0.0225,-0.0184,-0.0158,-0.0120,-0.0158,-0.0184,-0.0225,-0.0218,-0.0250]];
+	return out;
+
+} else if (kernel == "STD")  {
+	var out = 
+	[[-0.0408,-0.0086,-0.0207,-0.0328, 0.0039, 0.0360, 0.0039,-0.0328,-0.0207,-0.0086,-0.0408],
+	 [-0.0086,-0.0273,-0.0378,-0.0350,-0.1214,-0.1736,-0.1214,-0.0350,-0.0378,-0.0273,-0.0086],
+	 [-0.0207,-0.0378,-0.0422,-0.0989, 0.0394, 0.1191, 0.0394,-0.0989,-0.0422,-0.0378,-0.0207],
+	 [-0.0328,-0.0350,-0.0989,-0.0474,-0.6133,-1.1096,-0.6133,-0.0474,-0.0989,-0.0350,-0.0328],
+	 [ 0.0039,-0.1214, 0.0394,-0.6133,-0.0824, 3.1046,-0.0824,-0.6133, 0.0394,-0.1214, 0.0039],
+	 [ 0.0360,-0.1736, 0.1191,-1.1096, 3.1046,13.0584, 3.1046,-1.1096, 0.1191,-0.1736, 0.0360],
+	 [ 0.0039,-0.1214, 0.0394,-0.6133,-0.0824, 3.1046,-0.0824,-0.6133, 0.0394,-0.1214, 0.0039],
+	 [-0.0328,-0.0350,-0.0989,-0.0474,-0.6133,-1.1096,-0.6133,-0.0474,-0.0989,-0.0350,-0.0328],
+	 [-0.0207,-0.0378,-0.0422,-0.0989, 0.0394, 0.1191, 0.0394,-0.0989,-0.0422,-0.0378,-0.0207],
+	 [-0.0086,-0.0273,-0.0378,-0.0350,-0.1214,-0.1736,-0.1214,-0.0350,-0.0378,-0.0273,-0.0086],
+	 [-0.0408,-0.0086,-0.0207,-0.0328, 0.0039, 0.0360, 0.0039,-0.0328,-0.0207,-0.0086,-0.0408]];
+	return out;
+} else if (kernel == "CHST")  {
+	var out = 
+	[[-0.0199,-0.0396,-0.0147,-0.0201,-0.0473,-0.0361,-0.0473,-0.0201,-0.0147,-0.0396,-0.0199],
+	 [-0.0396,-0.0087,-0.0409,-0.0677,-0.0282,-0.0528,-0.0282,-0.0677,-0.0409,-0.0087,-0.0396],
+	 [-0.0147,-0.0409,-0.0659,-0.0181,-0.1649,-0.1675,-0.1649,-0.0181,-0.0659,-0.0409,-0.0147],
+	 [-0.0201,-0.0677,-0.0181,-0.2926,-0.2820,-0.1783,-0.2820,-0.2926,-0.0181,-0.0677,-0.0201],
+	 [-0.0473,-0.0282,-0.1649,-0.2820,0.9840,2.3831,0.9840,-0.2820,-0.1649,-0.0282,-0.0473],
+	 [-0.0361,-0.0528,-0.1675,-0.1783,2.3831,7.8760,2.3831,-0.1783,-0.1675,-0.0528,-0.0361],
+	 [-0.0473,-0.0282,-0.1649,-0.2820,0.9840,2.3831,0.9840,-0.2820,-0.1649,-0.0282,-0.0473],
+	 [-0.0201,-0.0677,-0.0181,-0.2926,-0.2820,-0.1783,-0.2820,-0.2926,-0.0181,-0.0677,-0.0201],
+	 [-0.0147,-0.0409,-0.0659,-0.0181,-0.1649,-0.1675,-0.1649,-0.0181,-0.0659,-0.0409,-0.0147],
+	 [-0.0396,-0.0087,-0.0409,-0.0677,-0.0282,-0.0528,-0.0282,-0.0677,-0.0409,-0.0087,-0.0396],
+	 [-0.0199,-0.0396,-0.0147,-0.0201,-0.0473,-0.0361,-0.0473,-0.0201,-0.0147,-0.0396,-0.0199]]
+	return out;
+} else if (kernel == "LUNG")  {
+	return [[-0.1633,0.0617,0.1048,-0.2830,0.1260,0.5054,0.1260,-0.2830,0.1048,0.0617,-0.1633],
+		[0.0617,0.0435,-0.3143,0.3472,-0.3212,-0.9393,-0.3212,0.3472,-0.3143,0.0435,0.0617],
+		[0.1048,-0.3143,0.4198,-0.6171,0.3425,1.7908,0.3425,-0.6171,0.4198,-0.3143,0.1048],
+		[-0.2830,0.3472,-0.6171,0.6814,-0.3916,-5.5121,-0.3916,0.6814,-0.6171,0.3472,-0.2830],
+		[0.1260,-0.3212,0.3425,-0.3916,-7.8505,2.4670,-7.8505,-0.3916,0.3425,-0.3212,0.1260],
+		[0.5054,-0.9393,1.7908,-5.5121,2.4670,56.4997,2.4670,-5.5121,1.7908,-0.9393,0.5054],
+		[0.1260,-0.3212,0.3425,-0.3916,-7.8505,2.4670,-7.8505,-0.3916,0.3425,-0.3212,0.1260],
+		[-0.2830,0.3472,-0.6171,0.6814,-0.3916,-5.5121,-0.3916,0.6814,-0.6171,0.3472,-0.2830],
+		[0.1048,-0.3143,0.4198,-0.6171,0.3425,1.7908,0.3425,-0.6171,0.4198,-0.3143,0.1048],
+		[0.0617,0.0435,-0.3143,0.3472,-0.3212,-0.9393,-0.3212,0.3472,-0.3143,0.0435,0.0617],
+		[-0.1633,0.0617,0.1048,-0.2830,0.1260,0.5054,0.1260,-0.2830,0.1048,0.0617,-0.1633]];
+
+} else if (kernel == "BONE")  {
+	return [[-0.0049,-0.0058,0.0061,-0.0942,-0.1166,0.1720,-0.1166,-0.0942,0.0061,-0.0058,-0.0049],
+		[-0.0058,-0.0199,-0.0758,0.0657,0.1576,-0.3377,0.1576,0.0657,-0.0758,-0.0199,-0.0058],
+		[0.0061,-0.0758,0.0857,-0.1501,-0.5567,0.3115,-0.5567,-0.1501,0.0857,-0.0758,0.0061],
+		[-0.0942,0.0657,-0.1501,-0.3347,0.9717,-0.6421,0.9717,-0.3347,-0.1501,0.0657,-0.0942],
+		[-0.1166,0.1576,-0.5567,0.9717,-2.6744,-2.6897,-2.6744,0.9717,-0.5567,0.1576,-0.1166],
+		[0.1720,-0.3377,0.3115,-0.6421,-2.6897,37.9229,-2.6897,-0.6421,0.3115,-0.3377,0.1720],
+		[-0.1166,0.1576,-0.5567,0.9717,-2.6744,-2.6897,-2.6744,0.9717,-0.5567,0.1576,-0.1166],
+		[-0.0942,0.0657,-0.1501,-0.3347,0.9717,-0.6421,0.9717,-0.3347,-0.1501,0.0657,-0.0942],
+		[0.0061,-0.0758,0.0857,-0.1501,-0.5567,0.3115,-0.5567,-0.1501,0.0857,-0.0758,0.0061],
+		[-0.0058,-0.0199,-0.0758,0.0657,0.1576,-0.3377,0.1576,0.0657,-0.0758,-0.0199,-0.0058],
+		[-0.0049,-0.0058,0.0061,-0.0942,-0.1166,0.1720,-0.1166,-0.0942,0.0061,-0.0058,-0.0049]];
+
+} else if (kernel == "BONE+")  {
+	return [[-0.0018,-0.0039,0.0174,-0.1652,-0.1917,0.3312,-0.1917,-0.1652,0.0174,-0.0039,-0.0018],
+		[-0.0039,-0.0274,-0.1267,0.1566,0.3068,-0.5843,0.3068,0.1566,-0.1267,-0.0274,-0.0039],
+		[0.0174,-0.1267,0.1963,-0.2577,-0.9457,0.6456,-0.9457,-0.2577,0.1963,-0.1267,0.0174],
+		[-0.1652,0.1566,-0.2577,-0.4880,1.9275,-1.0754,1.9275,-0.4880,-0.2577,0.1566,-0.1652],
+		[-0.1917,0.3068,-0.9457,1.9275,-5.3621,-6.1272,-5.3621,1.9275,-0.9457,0.3068,-0.1917],
+		[0.3312,-0.5843,0.6456,-1.0754,-6.1272,57.7067,-6.1272,-1.0754,0.6456,-0.5843,0.3312],
+		[-0.1917,0.3068,-0.9457,1.9275,-5.3621,-6.1272,-5.3621,1.9275,-0.9457,0.3068,-0.1917],
+		[-0.1652,0.1566,-0.2577,-0.4880,1.9275,-1.0754,1.9275,-0.4880,-0.2577,0.1566,-0.1652],
+		[0.0174,-0.1267,0.1963,-0.2577,-0.9457,0.6456,-0.9457,-0.2577,0.1963,-0.1267,0.0174],
+		[-0.0039,-0.0274,-0.1267,0.1566,0.3068,-0.5843,0.3068,0.1566,-0.1267,-0.0274,-0.0039],
+		[-0.0018,-0.0039,0.0174,-0.1652,-0.1917,0.3312,-0.1917,-0.1652,0.0174,-0.0039,-0.0018]];
+
+} else if (kernel == "DETAIL")  {
+	return [[-0.0274,-0.0161,-0.0136,-0.0398,-0.0198,0.0332,-0.0198,-0.0398,-0.0136,-0.0161,-0.0274],
+		[-0.0161,-0.0200,-0.0463,-0.0304,-0.0715,-0.1643,-0.0715,-0.0304,-0.0463,-0.0200,-0.0161],
+		[-0.0136,-0.0463,-0.0318,-0.0824,-0.0601,0.0898,-0.0601,-0.0824,-0.0318,-0.0463,-0.0136],
+		[-0.0398,-0.0304,-0.0824,-0.1236,-0.3704,-0.8670,-0.3704,-0.1236,-0.0824,-0.0304,-0.0398],
+		[-0.0198,-0.0715,-0.0601,-0.3704,-0.1058,2.4328,-0.1058,-0.3704,-0.0601,-0.0715,-0.0198],
+		[0.0332,-0.1643,0.0898,-0.8670,2.4328,13.4730,2.4328,-0.8670,0.0898,-0.1643,0.0332],
+		[-0.0198,-0.0715,-0.0601,-0.3704,-0.1058,2.4328,-0.1058,-0.3704,-0.0601,-0.0715,-0.0198],
+		[-0.0398,-0.0304,-0.0824,-0.1236,-0.3704,-0.8670,-0.3704,-0.1236,-0.0824,-0.0304,-0.0398],
+		[-0.0136,-0.0463,-0.0318,-0.0824,-0.0601,0.0898,-0.0601,-0.0824,-0.0318,-0.0463,-0.0136],
+		[-0.0161,-0.0200,-0.0463,-0.0304,-0.0715,-0.1643,-0.0715,-0.0304,-0.0463,-0.0200,-0.0161],
+		[-0.0274,-0.0161,-0.0136,-0.0398,-0.0198,0.0332,-0.0198,-0.0398,-0.0136,-0.0161,-0.0274]];
+
+} else if (kernel == "EDGE")  {
+	return [[0.0021,-0.0942,-0.0414,0.0606,-0.0302,-0.3315,-0.0302,0.0606,-0.0414,-0.0942,0.0021],
+		[-0.0942,-0.0016,0.0348,-0.2249,-0.1063,0.3669,-0.1063,-0.2249,0.0348,-0.0016,-0.0942],
+		[-0.0414,0.0348,-0.2744,0.2505,0.4067,-0.3682,0.4067,0.2505,-0.2744,0.0348,-0.0414],
+		[0.0606,-0.2249,0.2505,0.3614,-0.5777,0.8206,-0.5777,0.3614,0.2505,-0.2249,0.0606],
+		[-0.0302,-0.1063,0.4067,-0.5777,-2.2852,-10.4158,-2.2852,-0.5777,0.4067,-0.1063,-0.0302],
+		[-0.3315,0.3669,-0.3682,0.8206,-10.4158,64.4283,-10.4158,0.8206,-0.3682,0.3669,-0.3315],
+		[-0.0302,-0.1063,0.4067,-0.5777,-2.2852,-10.4158,-2.2852,-0.5777,0.4067,-0.1063,-0.0302],
+		[0.0606,-0.2249,0.2505,0.3614,-0.5777,0.8206,-0.5777,0.3614,0.2505,-0.2249,0.0606],
+		[-0.0414,0.0348,-0.2744,0.2505,0.4067,-0.3682,0.4067,0.2505,-0.2744,0.0348,-0.0414],
+		[-0.0942,-0.0016,0.0348,-0.2249,-0.1063,0.3669,-0.1063,-0.2249,0.0348,-0.0016,-0.0942],
+		[0.0021,-0.0942,-0.0414,0.0606,-0.0302,-0.3315,-0.0302,0.0606,-0.0414,-0.0942,0.0021]];
+}
+
+}
+
+
+function applyNoise()
+{
+	var len = blurredPhantom.length;
+	var len2 = blurredPhantom[0].length;
+	var out = new Array(len);
+	for (var i=0; i<len; i++)
+	    out[i] = blurredPhantom[i].slice(0);
+
+	factor = (-7.2763*Math.exp(-1.0405*(voltage/80))+3.5673)*(0.3070*Math.pow(current,0.5129)+0.0244);
+
+	for (var i = 0; i < len; i++)
+	    for (var j = 0; j < len2; j++)
+		out[i][j] = blurredPhantom[i][j]+noise[i][j]*(11.7222/factor);
+
+	return out;
+}
+
+function standardDeviation(values){
+  var avg = average(values);
+  
+  var squareDiffs = values.map(function(value){
+    var diff = value - avg;
+    var sqrDiff = diff * diff;
+    return sqrDiff;
+  });
+  
+  var avgSquareDiff = average(squareDiffs);
+ 
+  var stdDev = Math.sqrt(avgSquareDiff);
+  return stdDev;
+}
+ 
+function average(data){
+  var sum = data.reduce(function(sum, value){
+    return sum + value;
+  }, 0);
+ 
+  var avg = sum / data.length;
+  return avg;
+}
+
+function clearGraphics()
+{
+	var imageData = context.createImageData(c.width, c.height);
+	context.save();
+	context.scale(scale, scale);
+	context.putImageData(imageData, 0, 0);
+	context.restore();
+}
+
+function updateGraphics()
+{
+	var val;
+
+	var imageData = context.createImageData(width, height);
+	var ima = applyNoise(blurredPhantom,noise);
+
+	var newCanvas = document.createElement('canvas');
+
+	newCanvas.id = "BufferCanvas";
+	newCanvas.width = imageData.width;
+	newCanvas.height = imageData.height;
+	
+
+	var ind = 0;
+	for (var i = 0; i < width; i++)
+		for (var j = 0; j < height; j++)
+		{
+			val = Math.round(((ima[j][i]-(windowCenter-0.5))/(windowWidth-1)+0.5)*255);
+
+
+			imageData.data[ind++]=val;
+			imageData.data[ind++]=val;
+			imageData.data[ind++]=val;
+			imageData.data[ind++]=255;
+		}
+	
+	newCanvas.getContext("2d").putImageData(imageData, 0, 0);
+
+
+	//context.putImageData(imageData, 0, 0);
+
+	//context.save();
+	//context.scale(scale, scale);
+	context.drawImage(newCanvas, width/2*(1-1/scale),height/2*(1-1/scale),width/scale,height/scale,(c.width-width*scale)/2,(c.height-height*scale)/2,width*scale,height*scale);
+	//context.restore();
+	
+	drawTexts();
+
+}
+
+function drawTexts() {
+	var dose = (18.8985*Math.exp(1.0372*(voltage/120))-29.5458)*(current/300);
+	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
+
+	context.fillStyle = "white";
+	context.fillRect(0,0,140,100);
+	context.fillStyle = "black";
+	context.font = "bold 12px Cambria";
+
+	context.fillText(parseFloat(dose).toFixed(2)+" mGy", 10, 10, 120);
+	context.fillText(current+" mAs", 10, 25, 120);
+	context.fillText(voltage+" kVp", 10, 40, 120);
+	context.fillText(parseFloat(concentration).toFixed(1)+" I-mg/ml (" + parseFloat(iodine).toFixed(1) +  " HU)", 10, 55, 140);
+	context.fillText("W/L: "+windowWidth+"/"+windowCenter, 10, 70, 120);
+}
+
+function convolute (image, kernel)
+{
+	var out = new Array(width);
+	var halfK = Math.floor(kernel.length/2);
+	for (var i=0; i<width; i++)
+		out[i] = phantom[i].slice(0);
+
+	for (var i=halfK; i<width-halfK; i++)
+		for (var j=halfK; j<height-halfK; j++)
+		{
+			var sum = 0;
+			for (var k=-halfK; k <= halfK; k++)
+				for (var l=-halfK; l <= halfK; l++)
+					sum = sum + kernel[halfK+k][halfK+l]*image[i+k][j+l];
+			out[i][j] = sum;
+		}
+
+	return out;
+};
+
+
+function currentChange(newCurrent)
+{
+	current = newCurrent;
+	updateGraphics();
+}
+
+function voltageInput(newVoltage)
+{
+	voltage = newVoltage;
+
+	drawTexts();
+}
+
+function voltageChange(newVoltage)
+{
+	voltage = newVoltage;
+
+	drawInserts(phantom);
+	blurredPhantom = applyMTF();
+
+	updateGraphics();
+}
+
+
+function windowWidthChange(newWidth)
+{
+	windowWidth = newWidth;
+	updateGraphics();
+}
+
+function windowCenterChange(newCenter)
+{
+	windowCenter = newCenter;
+	updateGraphics();
+}
+
+function concentrationChange(newConcentration)
+{
+	concentration = newConcentration;
+
+	drawInserts(phantom);
+	blurredPhantom = applyMTF();
+
+	updateGraphics();
+}
+
+function concentrationInput(newConcentration)
+{
+	concentration = newConcentration;
+
+	drawTexts();
+}
+
+function scaleChange(newScale)
+{
+	if(newScale < scale)
+		clearGraphics();
+
+	scale = newScale;
+	updateGraphics();
+}
+
+function kernelChange(newKernel) {
+	nKernel = newKernel;
+	blurredPhantom = applyMTF();
+	noise = generateNoise();
+	updateGraphics();
+
+}
+
+
+function onClickCanvas()
+{
+	noise = generateNoise();
+	updateGraphics();
+}
+
+</script>
+</head>
+<body onload="first_run()" onresize="init()">
+<p class="noselect" align="center"><canvas id="sliceCanvas" onclick="onClickCanvas()"></canvas></p>
+<font face="Calibri"><p class="noselect" align="left">
+<input type="range" name="sliderCurrent" min="5" max="800" step="1" value="100" style="width: 90%;" oninput="currentChange(this.value)" onchange="currentChange(this.value)"><b>mAs</b><br>
+<input type="range" name="sliderVoltage" min="80" max="140" step="1" value="120" style="width: 90%;" oninput="voltageInput(this.value)" onchange="voltageChange(this.value)">kVp<br>
+<input type="range" name="sliderWindowWidth" min="0" max="2000" step="1" value="350" style="width: 90%;" oninput="windowWidthChange(this.value)" onchange="windowWidthChange(this.value)"><b>W</b><br>
+<input type="range" name="sliderWindowCenter" min="-1000" max="1000" step="1" value="50" style="width: 90%;" oninput="windowCenterChange(this.value)" onchange="windowCenterChange(this.value)"><b>L</b><br>
+<input type="range" name="sliderConcentration" min="1" max="40" step="0.5" value="5" style="width: 90%;" oninput="concentrationInput(this.value)" onchange="concentrationChange(this.value)">I-mg/ml<br>
+<input type="range" name="sliderScale" min="0.25" max="5" step="0.25" value="1" style="width: 90%;" oninput="scaleChange(this.value)" onchange="scaleChange(this.value)"><b>scale</b>
+<select name="selectKernel" onchange="kernelChange(this.value)">
+	<option value="STD" selected>Standard</option>
+	<option value="SOFT">Soft</option>
+	<option value="CHST">Chest</option>
+	<option value="LUNG">Lung</option>
+	<option value="BONE">Bone</option>
+	<option value="BONE+">Bone+</option>
+	<option value="DETAIL">Detail</option>
+	<option value="EDGE">Edge</option>
+</select><br>
+</p>
+</body>
+</html>
