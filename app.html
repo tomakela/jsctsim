@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -14,11 +13,9 @@
 </style>
 <title>CT noise simulator</title>
 <script type="text/javascript">
-
 var phantom, blurredPhantom, noise, current, voltage, 
     nKernel, gKernel, width, height, context, scale,
     windowWidth, windowCenter, concentration,c;
-
 function first_run()
 {
 	c = document.getElementById("sliceCanvas");
@@ -26,9 +23,7 @@ function first_run()
 	
 	width = 512;
 	height = 512;
-
 	init();
-
 	/*
 	c.addEventListener('mousemove', function(evt) {
       		var mousePos = getMousePos(c, evt);
@@ -37,101 +32,170 @@ function first_run()
 	}, false);
 	*/
 }
-
 /*
 function getMousePos(canvas, event)
 {
     var mouseX = (event.pageX - canvas.offsetLeft - (c.width-width*scale)/2)/scale;
     var mouseY = (event.pageY - canvas.offsetTop - (c.height-height*scale)/2)/scale;
-
     return {
         x: mouseX,
         y: mouseY };
 }
 */
-
 function init()
 {
-
 	c.width = Math.max(Math.round(window.innerWidth*0.95),width);
 	c.height = Math.max(Math.round(window.innerHeight*0.75),height);
-
-
 	windowWidth = document.getElementsByName("sliderWindowWidth")[0].value;
 	windowCenter = document.getElementsByName("sliderWindowCenter")[0].value;
 	current = document.getElementsByName("sliderCurrent")[0].value;
 	voltage = document.getElementsByName("sliderVoltage")[0].value;
 	concentration = document.getElementsByName("sliderConcentration")[0].value;
 	scale = document.getElementsByName("sliderScale")[0].value;
-
 	nKernel = document.getElementsByName("selectKernel")[0].value;
-
-	generateKernel();
-
+	gKernel = generateKernel(nKernel);
 	phantom = generatePhantom();
-
 	blurredPhantom = applyMTF();
-
 	noise = generateNoise();
-
 	updateGraphics();
-
 }
-
-
-function generateKernel()
+function generateKernel_old()
 {
 	var w = 5;
 	var h = 5;
 	var sum = 0;
-
-
 	var out = new Array(w);
-
-
 	for (var i = 0; i < w; i++)
 		out[i] = new Array(h);
-
 	for (var i = 0; i < w; i++)
 		for (var j = 0; j < h; j++)
 		{
 			out[i][j] = 1;
 			sum = sum + out[i][j];
 		}
-
-
 	for (var i = 0; i < w; i++)
 		for (var j = 0; j < h; j++)
 			out[i][j] = out[i][j]/sum;
-
 	gKernel = out;
 }
+
+function generateKernel(kernel)
+{
+if (kernel == "STD")
+{
+    return [[ 0.0000, 0.0000, 0.0011, 0.0051, 0.0055, 0.0051, 0.0011, 0.0000, 0.0000],
+            [ 0.0000, 0.0038, 0.0024,-0.0029,-0.0038,-0.0029, 0.0024, 0.0038, 0.0000],
+            [ 0.0011, 0.0024,-0.0037, 0.0062, 0.0156, 0.0062,-0.0037, 0.0024, 0.0011],
+            [ 0.0051,-0.0029, 0.0062, 0.0583, 0.1044, 0.0583, 0.0062,-0.0029, 0.0051],
+            [ 0.0055,-0.0038, 0.0156, 0.1044, 0.1848, 0.1044, 0.0156,-0.0038, 0.0055],
+            [ 0.0051,-0.0029, 0.0062, 0.0583, 0.1044, 0.0583, 0.0062,-0.0029, 0.0051],
+            [ 0.0011, 0.0024,-0.0037, 0.0062, 0.0156, 0.0062,-0.0037, 0.0024, 0.0011],
+            [ 0.0000, 0.0038, 0.0024,-0.0029,-0.0038,-0.0029, 0.0024, 0.0038, 0.0000],
+            [ 0.0000, 0.0000, 0.0011, 0.0051, 0.0055, 0.0051, 0.0011, 0.0000, 0.0000]];
+}
+if (kernel == "SOFT")
+{
+    return [[ 0.0000, 0.0000, 0.0010, 0.0032, 0.0033, 0.0032, 0.0010, 0.0000, 0.0000],
+            [ 0.0000, 0.0025, 0.0012,-0.0017,-0.0019,-0.0017, 0.0012, 0.0025, 0.0000],
+            [ 0.0010, 0.0012,-0.0013, 0.0098, 0.0192, 0.0098,-0.0013, 0.0012, 0.0010],
+            [ 0.0032,-0.0017, 0.0098, 0.0598, 0.0998, 0.0598, 0.0098,-0.0017, 0.0032],
+            [ 0.0033,-0.0019, 0.0192, 0.0998, 0.1661, 0.0998, 0.0192,-0.0019, 0.0033],
+            [ 0.0032,-0.0017, 0.0098, 0.0598, 0.0998, 0.0598, 0.0098,-0.0017, 0.0032],
+            [ 0.0010, 0.0012,-0.0013, 0.0098, 0.0192, 0.0098,-0.0013, 0.0012, 0.0010],
+            [ 0.0000, 0.0025, 0.0012,-0.0017,-0.0019,-0.0017, 0.0012, 0.0025, 0.0000],
+            [ 0.0000, 0.0000, 0.0010, 0.0032, 0.0033, 0.0032, 0.0010, 0.0000, 0.0000]];
+}
+if (kernel == "LUNG")
+{
+    return [[ 0.0000, 0.0000, 0.0316,-0.1075,-0.1142,-0.1075, 0.0316, 0.0000, 0.0000],
+            [ 0.0000,-0.0720,-0.0280,-0.0171,-0.0883,-0.0171,-0.0280,-0.0720, 0.0000],
+            [ 0.0316,-0.0280,-0.2063,-0.6659,-0.6994,-0.6659,-0.2063,-0.0280, 0.0316],
+            [-0.1075,-0.0171,-0.6659, 0.1578, 1.6625, 0.1578,-0.6659,-0.0171,-0.1075],
+            [-0.1142,-0.0883,-0.6994, 1.6625, 4.7348, 1.6625,-0.6994,-0.0883,-0.1142],
+            [-0.1075,-0.0171,-0.6659, 0.1578, 1.6625, 0.1578,-0.6659,-0.0171,-0.1075],
+            [ 0.0316,-0.0280,-0.2063,-0.6659,-0.6994,-0.6659,-0.2063,-0.0280, 0.0316],
+            [ 0.0000,-0.0720,-0.0280,-0.0171,-0.0883,-0.0171,-0.0280,-0.0720, 0.0000],
+            [ 0.0000, 0.0000, 0.0316,-0.1075,-0.1142,-0.1075, 0.0316, 0.0000, 0.0000]];
+}
+if (kernel == "CHST")
+{
+    return [[ 0.0000, 0.0000, 0.0013, 0.0040, 0.0042, 0.0040, 0.0013, 0.0000, 0.0000],
+            [ 0.0000, 0.0032, 0.0019,-0.0006,-0.0003,-0.0006, 0.0019, 0.0032, 0.0000],
+            [ 0.0013, 0.0019, 0.0013, 0.0149, 0.0238, 0.0149, 0.0013, 0.0019, 0.0013],
+            [ 0.0040,-0.0006, 0.0149, 0.0563, 0.0854, 0.0563, 0.0149,-0.0006, 0.0040],
+            [ 0.0042,-0.0003, 0.0238, 0.0854, 0.1322, 0.0854, 0.0238,-0.0003, 0.0042],
+            [ 0.0040,-0.0006, 0.0149, 0.0563, 0.0854, 0.0563, 0.0149,-0.0006, 0.0040],
+            [ 0.0013, 0.0019, 0.0013, 0.0149, 0.0238, 0.0149, 0.0013, 0.0019, 0.0013],
+            [ 0.0000, 0.0032, 0.0019,-0.0006,-0.0003,-0.0006, 0.0019, 0.0032, 0.0000],
+            [ 0.0000, 0.0000, 0.0013, 0.0040, 0.0042, 0.0040, 0.0013, 0.0000, 0.0000]];
+}
+if (kernel == "DETAIL")
+{
+    return [[ 0.0000, 0.0000, 0.0012, 0.0054, 0.0058, 0.0054, 0.0012, 0.0000, 0.0000],
+            [ 0.0000, 0.0041, 0.0025,-0.0023,-0.0028,-0.0023, 0.0025, 0.0041, 0.0000],
+            [ 0.0012, 0.0025,-0.0022, 0.0083, 0.0170, 0.0083,-0.0022, 0.0025, 0.0012],
+            [ 0.0054,-0.0023, 0.0083, 0.0559, 0.0985, 0.0559, 0.0083,-0.0023, 0.0054],
+            [ 0.0058,-0.0028, 0.0170, 0.0985, 0.1733, 0.0985, 0.0170,-0.0028, 0.0058],
+            [ 0.0054,-0.0023, 0.0083, 0.0559, 0.0985, 0.0559, 0.0083,-0.0023, 0.0054],
+            [ 0.0012, 0.0025,-0.0022, 0.0083, 0.0170, 0.0083,-0.0022, 0.0025, 0.0012],
+            [ 0.0000, 0.0041, 0.0025,-0.0023,-0.0028,-0.0023, 0.0025, 0.0041, 0.0000],
+            [ 0.0000, 0.0000, 0.0012, 0.0054, 0.0058, 0.0054, 0.0012, 0.0000, 0.0000]];
+}
+if (kernel == "BONE")
+{
+    return [[ 0.0000, 0.0000, 0.0004, 0.0021, 0.0026, 0.0021, 0.0004, 0.0000, 0.0000],
+            [ 0.0000, 0.0015, 0.0028, 0.0015, 0.0006, 0.0015, 0.0028, 0.0015, 0.0000],
+            [ 0.0004, 0.0028,-0.0005,-0.0023, 0.0022,-0.0023,-0.0005, 0.0028, 0.0004],
+            [ 0.0021, 0.0015,-0.0023, 0.0493, 0.1200, 0.0493,-0.0023, 0.0015, 0.0021],
+            [ 0.0026, 0.0006, 0.0022, 0.1200, 0.2616, 0.1200, 0.0022, 0.0006, 0.0026],
+            [ 0.0021, 0.0015,-0.0023, 0.0493, 0.1200, 0.0493,-0.0023, 0.0015, 0.0021],
+            [ 0.0004, 0.0028,-0.0005,-0.0023, 0.0022,-0.0023,-0.0005, 0.0028, 0.0004],
+            [ 0.0000, 0.0015, 0.0028, 0.0015, 0.0006, 0.0015, 0.0028, 0.0015, 0.0000],
+            [ 0.0000, 0.0000, 0.0004, 0.0021, 0.0026, 0.0021, 0.0004, 0.0000, 0.0000]];
+}
+if (kernel == "BONE+")
+{
+    return [[ 0.0000, 0.0000, 0.0054, 0.0006,-0.0003, 0.0006, 0.0054, 0.0000, 0.0000],
+            [ 0.0000, 0.0022, 0.0030, 0.0063, 0.0043, 0.0063, 0.0030, 0.0022, 0.0000],
+            [ 0.0054, 0.0030, 0.0000,-0.0208,-0.0218,-0.0208, 0.0000, 0.0030, 0.0054],
+            [ 0.0006, 0.0063,-0.0208, 0.0378, 0.1454, 0.0378,-0.0208, 0.0063, 0.0006],
+            [-0.0003, 0.0043,-0.0218, 0.1454, 0.3749, 0.1454,-0.0218, 0.0043,-0.0003],
+            [ 0.0006, 0.0063,-0.0208, 0.0378, 0.1454, 0.0378,-0.0208, 0.0063, 0.0006],
+            [ 0.0054, 0.0030, 0.0000,-0.0208,-0.0218,-0.0208, 0.0000, 0.0030, 0.0054],
+            [ 0.0000, 0.0022, 0.0030, 0.0063, 0.0043, 0.0063, 0.0030, 0.0022, 0.0000],
+            [ 0.0000, 0.0000, 0.0054, 0.0006,-0.0003, 0.0006, 0.0054, 0.0000, 0.0000]];
+}
+if (kernel == "EDGE")
+{
+    return [[ 0.0000, 0.0000, 0.0020, 0.0083, 0.0088, 0.0083, 0.0020, 0.0000, 0.0000],
+            [ 0.0000, 0.0066, 0.0042,-0.0024,-0.0032,-0.0024, 0.0042, 0.0066, 0.0000],
+            [ 0.0020, 0.0042,-0.0033, 0.0002, 0.0041, 0.0002,-0.0033, 0.0042, 0.0020],
+            [ 0.0083,-0.0024, 0.0002, 0.0421, 0.1071, 0.0421, 0.0002,-0.0024, 0.0083],
+            [ 0.0088,-0.0032, 0.0041, 0.1071, 0.2523, 0.1071, 0.0041,-0.0032, 0.0088],
+            [ 0.0083,-0.0024, 0.0002, 0.0421, 0.1071, 0.0421, 0.0002,-0.0024, 0.0083],
+            [ 0.0020, 0.0042,-0.0033, 0.0002, 0.0041, 0.0002,-0.0033, 0.0042, 0.0020],
+            [ 0.0000, 0.0066, 0.0042,-0.0024,-0.0032,-0.0024, 0.0042, 0.0066, 0.0000],
+            [ 0.0000, 0.0000, 0.0020, 0.0083, 0.0088, 0.0083, 0.0020, 0.0000, 0.0000]];
+}
+}
+
 
 function generatePhantom()
 {
 	var out = new Array(width);
-
 	var R2 = Math.pow(4*width/9,2);
-
-	var tissue = 70;
-
+	var tissue = 40;
 	for (var i = 0; i < width; i++)
 		out[i] = new Array(height);	
-
-
 	for (var i = 0; i < width; i++)
 		for (var j = 0; j < height; j++)
 			if (Math.pow(i-(width/2),2)+Math.pow(j-(height/2),2) < R2)
 				out[i][j] = tissue;
 			else
 				out[i][j] = -1000;
-
-
 	drawInserts(out);
-
 	return out;
 }
-
 function drawCircle(out, x0, y0, R, val)
 {
 	var R2 = Math.pow(R,2);
@@ -140,43 +204,33 @@ function drawCircle(out, x0, y0, R, val)
 			if (Math.pow(i-x0,2)+Math.pow(j-y0,2) < R2)
 				out[i][j] = val;
 }
-
 function drawInserts(out)
 {
 	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
-	var tis = 60, tisD = 20;
-
+	var tis = 40, tisD = 20;
 	for (var i = 0; i < 4; i++)
 		for (var j = 0; j < 5; j++)
 			drawCircle(out, 128+64*j, 128+64*i, 20-5*j+2, tis+tisD*i);	
-
-
 	drawCircle(out, 128, 384, 20, iodine);
 	drawCircle(out, 192, 384, 15, iodine);
 	drawCircle(out, 256, 384, 10, iodine);
 	drawCircle(out, 320, 384, 5, iodine);
 	drawCircle(out, 384, 384, 2, iodine);
 }
-
 function applyMTF()
 {
 	return convolute(phantom,gKernel);
 }
-
 function generateNoise()
 {
 	var out = new Array(width);
 	for (var i = 0; i < width; i++)
 		out[i] = new Array(height);
-
-
 	for (var i = 0; i < width; i++)
 		for (var j = 0; j < height; j++)
 			out[i][j] = normal_random();	
-
 	return convolute(out, noiseKernel(nKernel));
 }
-
 function randn()
 {
 	var out = 0;
@@ -184,7 +238,6 @@ function randn()
 		out = out + Math.random();
 	return out;
 }
-
 function normal_random(mean, variance) {
   if (mean == undefined)
     mean = 0.0;
@@ -198,14 +251,12 @@ function normal_random(mean, variance) {
     V2 = 2 * U2 - 1;
     S = V1 * V1 + V2 * V2;
   } while (S > 1);
-
   X = Math.sqrt(-2 * Math.log(S) / S) * V1;
 //Y = Math.sqrt(-2 * Math.log(S) / S) * V2;
   X = mean + Math.sqrt(variance) * X;
 //Y = mean + Math.sqrt(variance) * Y ;
   return X;
 }
-
 function noiseKernel(kernel)
 {
 if (kernel == "SOFT") {
@@ -222,7 +273,6 @@ if (kernel == "SOFT") {
 	 [-0.0218,-0.0222,-0.0283,-0.0641,-0.0860,-0.0947,-0.0860,-0.0641,-0.0283,-0.0222,-0.0218],
 	 [-0.0250,-0.0218,-0.0225,-0.0184,-0.0158,-0.0120,-0.0158,-0.0184,-0.0225,-0.0218,-0.0250]];
 	return out;
-
 } else if (kernel == "STD")  {
 	var out = 
 	[[-0.0408,-0.0086,-0.0207,-0.0328, 0.0039, 0.0360, 0.0039,-0.0328,-0.0207,-0.0086,-0.0408],
@@ -263,7 +313,6 @@ if (kernel == "SOFT") {
 		[0.1048,-0.3143,0.4198,-0.6171,0.3425,1.7908,0.3425,-0.6171,0.4198,-0.3143,0.1048],
 		[0.0617,0.0435,-0.3143,0.3472,-0.3212,-0.9393,-0.3212,0.3472,-0.3143,0.0435,0.0617],
 		[-0.1633,0.0617,0.1048,-0.2830,0.1260,0.5054,0.1260,-0.2830,0.1048,0.0617,-0.1633]];
-
 } else if (kernel == "BONE")  {
 	return [[-0.0049,-0.0058,0.0061,-0.0942,-0.1166,0.1720,-0.1166,-0.0942,0.0061,-0.0058,-0.0049],
 		[-0.0058,-0.0199,-0.0758,0.0657,0.1576,-0.3377,0.1576,0.0657,-0.0758,-0.0199,-0.0058],
@@ -276,7 +325,6 @@ if (kernel == "SOFT") {
 		[0.0061,-0.0758,0.0857,-0.1501,-0.5567,0.3115,-0.5567,-0.1501,0.0857,-0.0758,0.0061],
 		[-0.0058,-0.0199,-0.0758,0.0657,0.1576,-0.3377,0.1576,0.0657,-0.0758,-0.0199,-0.0058],
 		[-0.0049,-0.0058,0.0061,-0.0942,-0.1166,0.1720,-0.1166,-0.0942,0.0061,-0.0058,-0.0049]];
-
 } else if (kernel == "BONE+")  {
 	return [[-0.0018,-0.0039,0.0174,-0.1652,-0.1917,0.3312,-0.1917,-0.1652,0.0174,-0.0039,-0.0018],
 		[-0.0039,-0.0274,-0.1267,0.1566,0.3068,-0.5843,0.3068,0.1566,-0.1267,-0.0274,-0.0039],
@@ -289,7 +337,6 @@ if (kernel == "SOFT") {
 		[0.0174,-0.1267,0.1963,-0.2577,-0.9457,0.6456,-0.9457,-0.2577,0.1963,-0.1267,0.0174],
 		[-0.0039,-0.0274,-0.1267,0.1566,0.3068,-0.5843,0.3068,0.1566,-0.1267,-0.0274,-0.0039],
 		[-0.0018,-0.0039,0.0174,-0.1652,-0.1917,0.3312,-0.1917,-0.1652,0.0174,-0.0039,-0.0018]];
-
 } else if (kernel == "DETAIL")  {
 	return [[-0.0274,-0.0161,-0.0136,-0.0398,-0.0198,0.0332,-0.0198,-0.0398,-0.0136,-0.0161,-0.0274],
 		[-0.0161,-0.0200,-0.0463,-0.0304,-0.0715,-0.1643,-0.0715,-0.0304,-0.0463,-0.0200,-0.0161],
@@ -302,7 +349,6 @@ if (kernel == "SOFT") {
 		[-0.0136,-0.0463,-0.0318,-0.0824,-0.0601,0.0898,-0.0601,-0.0824,-0.0318,-0.0463,-0.0136],
 		[-0.0161,-0.0200,-0.0463,-0.0304,-0.0715,-0.1643,-0.0715,-0.0304,-0.0463,-0.0200,-0.0161],
 		[-0.0274,-0.0161,-0.0136,-0.0398,-0.0198,0.0332,-0.0198,-0.0398,-0.0136,-0.0161,-0.0274]];
-
 } else if (kernel == "EDGE")  {
 	return [[0.0021,-0.0942,-0.0414,0.0606,-0.0302,-0.3315,-0.0302,0.0606,-0.0414,-0.0942,0.0021],
 		[-0.0942,-0.0016,0.0348,-0.2249,-0.1063,0.3669,-0.1063,-0.2249,0.0348,-0.0016,-0.0942],
@@ -316,10 +362,7 @@ if (kernel == "SOFT") {
 		[-0.0942,-0.0016,0.0348,-0.2249,-0.1063,0.3669,-0.1063,-0.2249,0.0348,-0.0016,-0.0942],
 		[0.0021,-0.0942,-0.0414,0.0606,-0.0302,-0.3315,-0.0302,0.0606,-0.0414,-0.0942,0.0021]];
 }
-
 }
-
-
 function applyNoise()
 {
 	var len = blurredPhantom.length;
@@ -327,16 +370,12 @@ function applyNoise()
 	var out = new Array(len);
 	for (var i=0; i<len; i++)
 	    out[i] = blurredPhantom[i].slice(0);
-
 	factor = (-7.2763*Math.exp(-1.0405*(voltage/80))+3.5673)*(0.3070*Math.pow(current,0.5129)+0.0244);
-
 	for (var i = 0; i < len; i++)
 	    for (var j = 0; j < len2; j++)
 		out[i][j] = blurredPhantom[i][j]+noise[i][j]*(11.7222/factor);
-
 	return out;
 }
-
 function standardDeviation(values){
   var avg = average(values);
   
@@ -360,7 +399,6 @@ function average(data){
   var avg = sum / data.length;
   return avg;
 }
-
 function clearGraphics()
 {
 	var imageData = context.createImageData(c.width, c.height);
@@ -369,28 +407,21 @@ function clearGraphics()
 	context.putImageData(imageData, 0, 0);
 	context.restore();
 }
-
 function updateGraphics()
 {
 	var val;
-
 	var imageData = context.createImageData(width, height);
 	var ima = applyNoise(blurredPhantom,noise);
-
 	var newCanvas = document.createElement('canvas');
-
 	newCanvas.id = "BufferCanvas";
 	newCanvas.width = imageData.width;
 	newCanvas.height = imageData.height;
 	
-
 	var ind = 0;
 	for (var i = 0; i < width; i++)
 		for (var j = 0; j < height; j++)
 		{
 			val = Math.round(((ima[j][i]-(windowCenter-0.5))/(windowWidth-1)+0.5)*255);
-
-
 			imageData.data[ind++]=val;
 			imageData.data[ind++]=val;
 			imageData.data[ind++]=val;
@@ -398,42 +429,33 @@ function updateGraphics()
 		}
 	
 	newCanvas.getContext("2d").putImageData(imageData, 0, 0);
-
-
 	//context.putImageData(imageData, 0, 0);
-
 	//context.save();
 	//context.scale(scale, scale);
 	context.drawImage(newCanvas, width/2*(1-1/scale),height/2*(1-1/scale),width/scale,height/scale,(c.width-width*scale)/2,(c.height-height*scale)/2,width*scale,height*scale);
 	//context.restore();
 	
 	drawTexts();
-
 }
-
 function drawTexts() {
 	var dose = (18.8985*Math.exp(1.0372*(voltage/120))-29.5458)*(current/300);
 	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
-
 	context.fillStyle = "white";
 	context.fillRect(0,0,140,100);
 	context.fillStyle = "black";
 	context.font = "bold 12px Cambria";
-
 	context.fillText(parseFloat(dose).toFixed(2)+" mGy", 10, 10, 120);
 	context.fillText(current+" mAs", 10, 25, 120);
 	context.fillText(voltage+" kVp", 10, 40, 120);
 	context.fillText(parseFloat(concentration).toFixed(1)+" I-mg/ml (" + parseFloat(iodine).toFixed(1) +  " HU)", 10, 55, 140);
 	context.fillText("W/L: "+windowWidth+"/"+windowCenter, 10, 70, 120);
 }
-
 function convolute (image, kernel)
 {
 	var out = new Array(width);
 	var halfK = Math.floor(kernel.length/2);
 	for (var i=0; i<width; i++)
 		out[i] = phantom[i].slice(0);
-
 	for (var i=halfK; i<width-halfK; i++)
 		for (var j=halfK; j<height-halfK; j++)
 		{
@@ -443,88 +465,66 @@ function convolute (image, kernel)
 					sum = sum + kernel[halfK+k][halfK+l]*image[i+k][j+l];
 			out[i][j] = sum;
 		}
-
 	return out;
 };
-
-
 function currentChange(newCurrent)
 {
 	current = newCurrent;
 	updateGraphics();
 }
-
 function voltageInput(newVoltage)
 {
 	voltage = newVoltage;
-
 	drawTexts();
 }
-
 function voltageChange(newVoltage)
 {
 	voltage = newVoltage;
-
 	drawInserts(phantom);
 	blurredPhantom = applyMTF();
-
 	updateGraphics();
 }
-
-
 function windowWidthChange(newWidth)
 {
 	windowWidth = newWidth;
 	updateGraphics();
 }
-
 function windowCenterChange(newCenter)
 {
 	windowCenter = newCenter;
 	updateGraphics();
 }
-
 function concentrationChange(newConcentration)
 {
 	concentration = newConcentration;
-
 	drawInserts(phantom);
 	blurredPhantom = applyMTF();
-
 	updateGraphics();
 }
-
 function concentrationInput(newConcentration)
 {
 	concentration = newConcentration;
-
 	drawTexts();
 }
-
 function scaleChange(newScale)
 {
 	if(newScale < scale)
 		clearGraphics();
-
 	scale = newScale;
 	updateGraphics();
 }
-
 function kernelChange(newKernel) {
 	nKernel = newKernel;
+	gKernel = generateKernel(newKernel);
 	blurredPhantom = applyMTF();
 	noise = generateNoise();
 	updateGraphics();
-
 }
-
-
 function onClickCanvas()
 {
 	noise = generateNoise();
 	updateGraphics();
 }
-
 </script>
 </head>
 <body onload="first_run()" onresize="init()">
