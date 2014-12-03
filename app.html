@@ -13,9 +13,11 @@
 </style>
 <title>CT noise simulator</title>
 <script type="text/javascript">
+
 var phantom, blurredPhantom, noise, current, voltage, 
-    nKernel, gKernel, width, height, context, scale,
-    windowWidth, windowCenter, concentration,c;
+    nKernel, gKernel, width, height, context, scale = 1.0,
+    windowWidth, windowCenter, concentration,c,img,aorta;
+
 function first_run()
 {
 	c = document.getElementById("sliceCanvas");
@@ -23,7 +25,25 @@ function first_run()
 	
 	width = 512;
 	height = 512;
-	init();
+
+	img = new Image();
+	img.onload=function () { init(); };
+	img.src = 'segm.png';
+
+	c.addEventListener('mousewheel', function(evt) {
+	if (evt.wheelDelta > 0)
+	{
+		if (scale < 5)
+		{
+			scaleChange(scale+0.25);
+			document.getElementsByName("sliderScale")[0].value = scale;
+		}
+	}
+	else if (scale > 0.25)
+		scaleChange(scale-0.25);
+		document.getElementsByName("sliderScale")[0].value = scale;
+	}, false);
+
 	/*
 	c.addEventListener('mousemove', function(evt) {
       		var mousePos = getMousePos(c, evt);
@@ -51,7 +71,7 @@ function init()
 	current = document.getElementsByName("sliderCurrent")[0].value;
 	voltage = document.getElementsByName("sliderVoltage")[0].value;
 	concentration = document.getElementsByName("sliderConcentration")[0].value;
-	scale = document.getElementsByName("sliderScale")[0].value;
+	scale = parseInt(document.getElementsByName("sliderScale")[0].value);
 	nKernel = document.getElementsByName("selectKernel")[0].value;
 	gKernel = generateKernel(nKernel);
 	phantom = generatePhantom();
@@ -78,7 +98,6 @@ function generateKernel_old()
 			out[i][j] = out[i][j]/sum;
 	gKernel = out;
 }
-
 function generateKernel(kernel)
 {
 if (kernel == "STD")
@@ -178,9 +197,7 @@ if (kernel == "EDGE")
             [ 0.0000, 0.0000, 0.0020, 0.0083, 0.0088, 0.0083, 0.0020, 0.0000, 0.0000]];
 }
 }
-
-
-function generatePhantom()
+function generatePhantom_old()
 {
 	var out = new Array(width);
 	var R2 = Math.pow(4*width/9,2);
@@ -196,6 +213,70 @@ function generatePhantom()
 	drawInserts(out);
 	return out;
 }
+
+function generatePhantom()
+{
+
+	var out = new Array(width);
+	for (var i = 0; i < width; i++)
+		out[i] = new Array(height);	
+
+	/*
+	var R2 = Math.pow(4*width/9,2);
+	var tissue = 40;
+	for (var i = 0; i < width; i++)
+		out[i] = new Array(height);	
+	for (var i = 0; i < width; i++)
+		for (var j = 0; j < height; j++)
+			if (Math.pow(i-(width/2),2)+Math.pow(j-(height/2),2) < R2)
+				out[i][j] = tissue;
+			else
+				out[i][j] = -1000;
+	drawInserts(out);
+	*/
+
+
+	var testCanvas = document.createElement('canvas');
+	testCanvas.width = 512;
+	testCanvas.height = 512;
+	var con = testCanvas.getContext('2d');
+
+	con.drawImage(img,0,0);
+	var myDat = con.getImageData(0,0,512,512);
+	aorta = new Array
+	for (var i=0; i < myDat.data.length; i+=4)	
+	{
+		var x = (i/4)%512;
+		var y = Math.floor((i/4)/512);
+		var val = myDat.data[i];
+		var newVal;
+
+		if(val==0)
+			newVal = -1000;
+		if(val==2)
+			newVal = HU(voltage,-648);
+		if(val==3)
+			newVal = HU(voltage,-95);
+		if(val==4)
+			newVal = HU(voltage,36);
+		if(val==5)
+		{
+			newVal = HU(voltage,126);
+			aorta[aorta.length] = [x,y];
+		}
+		if(val==6)
+			newVal = HU(voltage,309);
+
+
+		out[x][y] = newVal;
+	}
+
+	drawInserts(out);
+
+	return out;
+
+}
+
 function drawCircle(out, x0, y0, R, val)
 {
 	var R2 = Math.pow(R,2);
@@ -204,7 +285,7 @@ function drawCircle(out, x0, y0, R, val)
 			if (Math.pow(i-x0,2)+Math.pow(j-y0,2) < R2)
 				out[i][j] = val;
 }
-function drawInserts(out)
+function drawInserts_old(out)
 {
 	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
 	var tis = 40, tisD = 20;
@@ -216,7 +297,33 @@ function drawInserts(out)
 	drawCircle(out, 256, 384, 10, iodine);
 	drawCircle(out, 320, 384, 5, iodine);
 	drawCircle(out, 384, 384, 2, iodine);
+
 }
+
+function drawInserts(out)
+{
+	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
+	tis = HU(voltage,60);
+	//var tis = 40, tisD = 20;
+	//for (var i = 0; i < 4; i++)
+	//	for (var j = 0; j < 5; j++)
+	//		drawCircle(out, 128+64*j, 128+64*i, 20-5*j+2, tis+tisD*i);
+
+	drawCircle(out, 115, 255, 10, tis);
+	drawCircle(out, 110, 285, 7, tis);
+	drawCircle(out, 115, 315, 5, tis);
+
+	drawCircle(out, 130, 220, 13, iodine);
+	drawCircle(out, 150, 190, 10, iodine);
+	drawCircle(out, 170, 170, 5, iodine);
+	drawCircle(out, 190, 155, 3, iodine);
+	drawCircle(out, 205, 150, 2, iodine);
+	drawCircle(out, 215, 148, 1, iodine);
+
+	for (var i = 0; i < aorta.length; i++)
+		out[aorta[i][0]][aorta[i][1]] = iodine*2;
+}
+
 function applyMTF()
 {
 	return convolute(phantom,gKernel);
@@ -387,7 +494,7 @@ function standardDeviation(values){
   
   var avgSquareDiff = average(squareDiffs);
  
-  var stdDev = Math.sqrt(avgSquareDiff);
+  var stdDev = Math.sqrt(avgcleSquareDiff);
   return stdDev;
 }
  
@@ -432,19 +539,33 @@ function updateGraphics()
 	//context.putImageData(imageData, 0, 0);
 	//context.save();
 	//context.scale(scale, scale);
-	context.drawImage(newCanvas, width/2*(1-1/scale),height/2*(1-1/scale),width/scale,height/scale,(c.width-width*scale)/2,(c.height-height*scale)/2,width*scale,height*scale);
+
+	//context.drawImage(newCanvas, width/2*(1-1/scale),height/2*(1-1/scale),width/scale,height/scale,(c.width-width*scale)/2,(c.height-height*scale)/2,width*scale,height*scale);
+	context.drawImage(newCanvas, 0, 0, width,height,(c.width-width*scale)/2,(c.height-height*scale)/2, width*scale, height*scale);
+
 	//context.restore();
 	
 	drawTexts();
 }
+
+function dose(kvp,mas)
+{
+	return (0.001125*kvp*kvp+0.0166*kvp-3.4760)*(mas/160);
+}
+
+function HU(kvp,hu120)
+{
+	return (-150.913404 + 1.971053*kvp + 1.126097*hu120 - 0.005930*kvp*kvp -0.001001*kvp*hu120 -0.000008*hu120*hu120);
+}
+
 function drawTexts() {
-	var dose = (18.8985*Math.exp(1.0372*(voltage/120))-29.5458)*(current/300);
+	//var dose = (18.8985*Math.exp(1.0372*(voltage/120))-29.5458)*(current/300);
 	var iodine = (3195.5966*Math.exp(-0.02314*voltage)+318.8966)/23.3*concentration;
 	context.fillStyle = "white";
 	context.fillRect(0,0,140,100);
 	context.fillStyle = "black";
 	context.font = "bold 12px Cambria";
-	context.fillText(parseFloat(dose).toFixed(2)+" mGy", 10, 10, 120);
+	context.fillText(parseFloat(dose(voltage,current)).toFixed(2)+" mGy (32 cm)", 10, 10, 120);
 	context.fillText(current+" mAs", 10, 25, 120);
 	context.fillText(voltage+" kVp", 10, 40, 120);
 	context.fillText(parseFloat(concentration).toFixed(1)+" I-mg/ml (" + parseFloat(iodine).toFixed(1) +  " HU)", 10, 55, 140);
@@ -480,6 +601,7 @@ function voltageInput(newVoltage)
 function voltageChange(newVoltage)
 {
 	voltage = newVoltage;
+	phantom = generatePhantom();
 	drawInserts(phantom);
 	blurredPhantom = applyMTF();
 	updateGraphics();
@@ -516,6 +638,7 @@ function scaleChange(newScale)
 function kernelChange(newKernel) {
 	nKernel = newKernel;
 	gKernel = generateKernel(newKernel);
+	phantom = generatePhantom();
 	blurredPhantom = applyMTF();
 	noise = generateNoise();
 	updateGraphics();
@@ -534,7 +657,7 @@ function onClickCanvas()
 <input type="range" name="sliderVoltage" min="80" max="140" step="1" value="120" style="width: 90%;" oninput="voltageInput(this.value)" onchange="voltageChange(this.value)">kVp<br>
 <input type="range" name="sliderWindowWidth" min="0" max="2000" step="1" value="350" style="width: 90%;" oninput="windowWidthChange(this.value)" onchange="windowWidthChange(this.value)"><b>W</b><br>
 <input type="range" name="sliderWindowCenter" min="-1000" max="1000" step="1" value="50" style="width: 90%;" oninput="windowCenterChange(this.value)" onchange="windowCenterChange(this.value)"><b>L</b><br>
-<input type="range" name="sliderConcentration" min="1" max="40" step="0.1" value="5" style="width: 90%;" oninput="concentrationInput(this.value)" onchange="concentrationChange(this.value)">I-mg/ml<br>
+<input type="range" name="sliderConcentration" min="1" max="40" step="0.1" value="4.4" style="width: 90%;" oninput="concentrationInput(this.value)" onchange="concentrationChange(this.value)">I-mg/ml<br>
 <input type="range" name="sliderScale" min="0.25" max="5" step="0.25" value="1" style="width: 90%;" oninput="scaleChange(this.value)" onchange="scaleChange(this.value)"><b>scale</b>
 <select name="selectKernel" onchange="kernelChange(this.value)">
 	<option value="STD" selected>Standard</option>
@@ -547,5 +670,7 @@ function onClickCanvas()
 	<option value="EDGE">Edge</option>
 </select><br>
 </p>
+
+
 </body>
 </html>
