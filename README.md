@@ -3,7 +3,9 @@ jsctsim
 
 HTML5/JavaScript based contrast, noise and resolution demonstration application for computed tomography
 
-www.helsinki.fi/~tdmakela/app.html
+https://tomakela.github.io/jsctsim/
+
+## Old info:
 
 Bolded parameters update while changing the slider value, non-bolded only after release
 
